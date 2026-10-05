@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Vrchat 유저를 위한 랜덤채팅</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background: #101114;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+
+        .app {
+            width: 100%;
+            max-width: 500px;
+            height: 100vh;
+            margin: auto;
+            background: #181a1f;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            padding: 18px;
+            border-bottom: 1px solid #303238;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 20px;
+        }
+
+        .screen {
+            display: none;
+            flex: 1;
+        }
+
+        .screen.active {
+            display: flex;
+        }
+
+        #home,
+        #waiting {
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 25px;
+            text-align: center;
+        }
+
+        button {
+            border: none;
+            border-radius: 10px;
+            padding: 14px 20px;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .primary {
+            background: white;
+            color: black;
+        }
+
+        .wide {
+            width: 100%;
+            margin-top: 20px;
+        }
+
+        #chat {
+            flex-direction: column;
+        }
+
+        .chat-header {
+            padding: 14px;
+            border-bottom: 1px solid #303238;
+        }
+
+        #messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+        }
+
+        .message {
+            width: fit-content;
+            max-width: 75%;
+            margin: 8px 0;
+            padding: 10px 13px;
+            border-radius: 14px;
+            word-break: break-word;
+        }
+
+        .mine {
+            margin-left: auto;
+            background: white;
+            color: black;
+        }
+
+        .theirs {
+            background: #292c33;
+        }
+
+        .system {
+            text-align: center;
+            color: #888;
+            font-size: 13px;
+            margin: 12px;
+        }
+
+        .input-area {
+            display: flex;
+            gap: 8px;
+            padding: 10px;
+            border-top: 1px solid #303238;
+        }
+
+        input {
+            flex: 1;
+            min-width: 0;
+            border: 1px solid #3a3d44;
+            border-radius: 10px;
+            padding: 13px;
+            background: #111318;
+            color: white;
+            outline: none;
+        }
+
+        .leave {
+            margin-top: 15px;
+            background: #292c33;
+            color: white;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="app">
+
+    <header>
+        <h1>Vrchat 유저를 위한 랜덤채팅</h1>
+    </header>
+
+
+    <!-- 시작 화면 -->
+
+    <section id="home" class="screen active">
+
+        <h2>익명 랜덤채팅</h2>
+
+        <p>
+            랜덤채팅을 시작하면<br>
+            다른 사용자와 자동으로 연결됩니다.
+        </p>
+
+        <button
+            id="startButton"
+            class="primary wide"
+            onclick="startChat()">
+            랜덤채팅 시작
+        </button>
+
+    </section>
+
+
+    <!-- 대기 화면 -->
+
+    <section id="waiting" class="screen">
+
+        <h2>상대를 기다리는 중...</h2>
+
+        <p>
+            다른 사용자가 들어오면<br>
+            자동으로 연결됩니다.
+        </p>
+
+        <button
+            class="leave"
+            onclick="leaveChat()">
+            취소
+        </button>
+
+    </section>
+
+
+    <!-- 채팅 화면 -->
+
+    <section id="chat" class="screen">
+
+        <div class="chat-header">
+            익명의 상대
+        </div>
+
+        <div id="messages">
+
+        </div>
+
+        <div class="input-area">
+
+            <input
+                id="messageInput"
+                type="text"
+                maxlength="500"
+                placeholder="메시지를 입력하세요..."
+                onkeydown="handleEnter(event)"
+            >
+
+            <button
+                class="primary"
+                onclick="sendMessage()">
+                전송
+            </button>
+
+        </div>
+
+    </section>
+
+</div>
+
+
+<!-- Socket.IO -->
+
+<script src="/socket.io/socket.io.js"></script>
+
+
+<script>
+
+let socket = null;
+
+
+// 화면 전환
+
+function showScreen(screenId) {
+
+    document
+        .querySelectorAll(".screen")
+        .forEach(function(screen) {
+
+            screen.classList.remove("active");
+
+        });
+
+    document
+        .getElementById(screenId)
+        .classList.add("active");
+}
+
+
+// 랜덤채팅 시작
+
+function startChat() {
+
+    console.log("랜덤채팅 시작 버튼 클릭");
+
+    showScreen("waiting");
+
+    socket = io();
+
+
+    // 서버가 대기 상태라고 알려줌
+
+    socket.on("waiting", function() {
+
+        console.log("상대를 기다리는 중");
+
+    });
+
+
+    // 매칭 성공
+
+    socket.on("matched", function() {
+
+        console.log("매칭 성공");
+
+        showScreen("chat");
+
+        addSystemMessage(
+            "상대와 연결되었습니다."
+        );
+
+    });
+
+
+    // 메시지 수신
+
+    socket.on("message", function(message) {
+
+        addMessage(
+            message,
+            false
+        );
+
+    });
+
+
+    // 상대방 퇴장
+
+    socket.on("partnerLeft", function() {
+
+        addSystemMessage(
+            "상대가 채팅을 종료했습니다."
+        );
+
+    });
+
+}
+
+
+// 메시지 전송
+
+function sendMessage() {
+
+    if (!socket) {
+        return;
+    }
+
+    const input =
+        document.getElementById("messageInput");
+
+    const message =
+        input.value.trim();
+
+    if (message === "") {
+        return;
+    }
+
+
+    addMessage(
+        message,
+        true
+    );
+
+
+    socket.emit(
+        "message",
+        message
+    );
+
+
+    input.value = "";
+
+}
+
+
+// 엔터키
+
+function handleEnter(event) {
+
+    if (event.key === "Enter") {
+
+        sendMessage();
+
+    }
+
+}
+
+
+// 메시지 표시
+
+function addMessage(message, mine) {
+
+    const div =
+        document.createElement("div");
+
+    div.classList.add("message");
+
+
+    if (mine) {
+
+        div.classList.add("mine");
+
+    } else {
+
+        div.classList.add("theirs");
+
+    }
+
+
+    div.textContent = message;
+
+
+    document
+        .getElementById("messages")
+        .appendChild(div);
+
+
+    const messages =
+        document.getElementById("messages");
+
+    messages.scrollTop =
+        messages.scrollHeight;
+
+}
+
+
+// 시스템 메시지
+
+function addSystemMessage(message) {
+
+    const div =
+        document.createElement("div");
+
+    div.classList.add("system");
+
+    div.textContent = message;
+
+
+    document
+        .getElementById("messages")
+        .appendChild(div);
+
+}
+
+
+// 나가기
+
+function leaveChat() {
+
+    if (socket) {
+
+        socket.disconnect();
+
+        socket = null;
+
+    }
+
+    showScreen("home");
+
+}
+
+</script>
+
+</body>
+</html>
